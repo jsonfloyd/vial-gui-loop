@@ -250,6 +250,7 @@ class ProtocolMacro(BaseProtocol):
         """
         Serialize a single macro, a macro is made out of macro actions (BasicAction)
         """
+        self.validate_macro(macro)
         out = b""
         for action in macro:
             out += action.serialize(self.vial_protocol)
