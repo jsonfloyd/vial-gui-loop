@@ -97,7 +97,7 @@ class MacroRecorder(BasicEditor):
         macros = self.keyboard.macro.split(b"\x00")
         for x, w in enumerate(self.macro_tab_w[:self.keyboard.macro_count]):
             title = "M{}".format(x)
-            if macros[x] != self.keyboard.macro_serialize(self.macro_tabs[x].actions()):
+            if macros[x] != self.serialize_macro_unchecked(self.macro_tabs[x].actions()):
                 title += "*"
             self.tabs.setTabText(x, title)
 
@@ -155,11 +155,14 @@ class MacroRecorder(BasicEditor):
         self.lbl_memory.setStyleSheet("QLabel { color: red; }" if memory > self.keyboard.macro_memory else "")
         self.update_tab_titles()
 
+    def serialize_macro_unchecked(self, macro):
+        return b"".join(action.serialize() for action in macro)
+
     def serialize(self):
         macros = []
         for x, t in enumerate(self.macro_tabs[:self.keyboard.macro_count]):
-            macros.append(t.actions())
-        return self.keyboard.macros_serialize(macros)
+            macros.append(self.serialize_macro_unchecked(t.actions()))
+        return b"\x00".join(macros)
 
     def deserialize(self, data):
         self.suppress_change = True
