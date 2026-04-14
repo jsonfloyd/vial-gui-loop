@@ -156,7 +156,7 @@ class MacroRecorder(BasicEditor):
         self.update_tab_titles()
 
     def serialize_macro_unchecked(self, macro):
-        return b"".join(action.serialize() for action in macro)
+        return b"".join(action.serialize(self.keyboard.vial_protocol) for action in macro)
 
     def serialize(self):
         macros = []
