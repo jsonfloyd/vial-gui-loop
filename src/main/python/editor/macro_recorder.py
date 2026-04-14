@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 import sys
 
-from PyQt5.QtWidgets import QPushButton, QHBoxLayout, QWidget, QLabel
+from PyQt5.QtWidgets import QPushButton, QHBoxLayout, QWidget, QLabel, QMessageBox
 
 from editor.basic_editor import BasicEditor
 from macro.macro_action import ActionText, ActionTap, ActionDown, ActionUp
@@ -176,6 +176,13 @@ class MacroRecorder(BasicEditor):
         self.on_change()
 
     def on_save(self):
+        macros = [t.actions() for t in self.macro_tabs[:self.keyboard.macro_count]]
+        try:
+            self.keyboard.validate_macros(macros)
+        except RuntimeError as e:
+            QMessageBox.warning(self, "", str(e))
+            return
+
         Unlocker.unlock(self.device.keyboard)
-        self.keyboard.set_macro(self.serialize())
+        self.keyboard.set_macro(self.keyboard.macros_serialize(macros))
         self.on_change()

@@ -3,7 +3,7 @@ import json
 
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import QPushButton, QGridLayout, QHBoxLayout, QToolButton, QVBoxLayout, \
-    QWidget, QMenu, QScrollArea, QFrame
+    QWidget, QMenu, QScrollArea, QFrame, QMessageBox
 
 from keycodes.keycodes import Keycode
 from macro.macro_action import ActionTap
@@ -130,25 +130,28 @@ class MacroTab(QVBoxLayout):
 
     def on_dlg_finished(self, res):
         if res > 0:
-            macro_text = self.dlg_textbox.getText()
-            if len(macro_text) < 6:
-                macro_text = "[]"
-            macro_load = json.loads(macro_text)
+            try:
+                macro_text = self.dlg_textbox.getText()
+                if len(macro_text) < 6:
+                    macro_text = "[]"
+                macro_load = json.loads(macro_text)
 
-            # ensure a list exists
-            if not isinstance(macro_load, list):
-                return
+                # ensure a list exists
+                if not isinstance(macro_load, list):
+                    return
 
-            # clear the actions from this tab
-            self.clear()
+                # clear the actions from this tab
+                self.clear()
 
-            # add each action from the json to this tab
-            for act in macro_load:
-                if act[0] in tag_to_action:
-                    obj = tag_to_action[act[0]]()
-                    actionUI = ui_action[type(obj)]
-                    obj.restore(act)
-                    self.add_action(actionUI(self.container, obj))
+                # add each action from the json to this tab
+                for act in macro_load:
+                    if act[0] in tag_to_action:
+                        obj = tag_to_action[act[0]]()
+                        actionUI = ui_action[type(obj)]
+                        obj.restore(act)
+                        self.add_action(actionUI(self.container, obj))
+            except (ValueError, RuntimeError) as e:
+                QMessageBox.warning(self.parent.parent, "", "Invalid macro format: {}".format(e))
 
     def on_change(self):
         self.changed.emit()

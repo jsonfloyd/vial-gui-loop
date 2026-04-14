@@ -3,7 +3,8 @@ import unittest
 
 from protocol.dummy_keyboard import DummyKeyboard
 from keycodes.keycodes import Keycode, recreate_keyboard_keycodes
-from macro.macro_action import ActionTap, ActionDown, ActionText, ActionDelay, ActionUp
+from macro.macro_action import ActionTap, ActionDown, ActionText, ActionDelay, ActionUp, ActionLoopStart, \
+    ActionLoopEnd, ActionRandDelay
 from macro.macro_key import KeyDown, KeyTap, KeyUp, KeyString
 from macro.macro_optimizer import remove_repeats, replace_with_tap, replace_with_string
 
@@ -65,6 +66,8 @@ class TestMacro(unittest.TestCase):
                                    ActionDown(["KC_C", "KC_B", "KC_A"]), ActionDelay(256)])
         self.assertEqual(data, b"Hello\x01\x01\x04\x01\x01\x05\x01\x01\x06World\x01\x02\x06\x01\x02\x05\x01\x02\x04"
                                b"\x01\x04\x02\x02")
+        data = kb.macro_serialize([ActionLoopStart(), ActionTap(["KC_F1"]), ActionRandDelay(1250, 2500), ActionLoopEnd()])
+        self.assertEqual(data, b"\x01\x10\x01\x01\x3A\x01\x12\xEA\x04\xC4\x09\x01\x11")
 
     def test_deserialize_v2(self):
         kb = DummyKeyboard(None)
@@ -85,6 +88,8 @@ class TestMacro(unittest.TestCase):
                                      b"\x01\x02\x04\x01\x04\x02\x02")
         self.assertEqual(macro, [ActionText("Hello"), ActionTap(["KC_A", "KC_B", "KC_C"]), ActionText("World"),
                                  ActionDown(["KC_C", "KC_B", "KC_A"]), ActionDelay(256)])
+        macro = kb.macro_deserialize(b"\x01\x10\x01\x01\x3A\x01\x12\xEA\x04\xC4\x09\x01\x11")
+        self.assertEqual(macro, [ActionLoopStart(), ActionTap(["KC_F1"]), ActionRandDelay(1250, 2500), ActionLoopEnd()])
 
     def test_save(self):
         down = ActionDown(["KC_A", "KC_B", "CMB_TOG"])
@@ -95,6 +100,12 @@ class TestMacro(unittest.TestCase):
         self.assertEqual(text.save(), ["text", "Hello world"])
         delay = ActionDelay(123)
         self.assertEqual(delay.save(), ["delay", 123])
+        loop_start = ActionLoopStart()
+        self.assertEqual(loop_start.save(), ["loop_start"])
+        loop_end = ActionLoopEnd()
+        self.assertEqual(loop_end.save(), ["loop_end"])
+        rand_delay = ActionRandDelay(1, 5)
+        self.assertEqual(rand_delay.save(), ["rand_delay", 1, 5])
 
     def test_restore(self):
         down = ActionDown()
@@ -109,6 +120,52 @@ class TestMacro(unittest.TestCase):
         delay = ActionDelay()
         delay.restore(["delay", 123])
         self.assertEqual(delay, ActionDelay(123))
+        loop_start = ActionLoopStart()
+        loop_start.restore(["loop_start"])
+        self.assertEqual(loop_start, ActionLoopStart())
+        loop_end = ActionLoopEnd()
+        loop_end.restore(["loop_end"])
+        self.assertEqual(loop_end, ActionLoopEnd())
+        rand_delay = ActionRandDelay()
+        rand_delay.restore(["rand_delay", 100, 200])
+        self.assertEqual(rand_delay, ActionRandDelay(100, 200))
+
+    def test_roundtrip_new_actions(self):
+        kb = DummyKeyboard(None)
+        kb.vial_protocol = 2
+        macro = [ActionText("x"), ActionLoopStart(), ActionTap(["KC_A"]), ActionRandDelay(10, 20), ActionLoopEnd()]
+        data = kb.macro_serialize(macro)
+        self.assertEqual(kb.macro_deserialize(data), macro)
+
+    def test_invalid_loop_validation(self):
+        kb = DummyKeyboard(None)
+        kb.vial_protocol = 2
+        with self.assertRaisesRegex(RuntimeError, "LOOP_END without matching LOOP_START"):
+            kb.validate_macro([ActionLoopEnd()])
+        with self.assertRaisesRegex(RuntimeError, "unclosed LOOP_START"):
+            kb.validate_macro([ActionLoopStart(), ActionTap(["KC_A"])])
+        with self.assertRaisesRegex(RuntimeError, "Macro M1: LOOP_END without matching LOOP_START"):
+            kb.validate_macros([[ActionText("ok")], [ActionLoopEnd()]])
+
+    def test_invalid_rand_delay_validation(self):
+        kb = DummyKeyboard(None)
+        kb.vial_protocol = 2
+        with self.assertRaisesRegex(RuntimeError, "minimum cannot be greater than maximum"):
+            kb.validate_macro([ActionRandDelay(100, 99)])
+        with self.assertRaisesRegex(RuntimeError, "range 0..65535"):
+            kb.validate_macro([ActionRandDelay(-1, 10)])
+        with self.assertRaisesRegex(RuntimeError, "range 0..65535"):
+            kb.validate_macro([ActionRandDelay(0, 70000)])
+        with self.assertRaisesRegex(RuntimeError, "expected \\[tag, minimum, maximum\\]"):
+            ActionRandDelay().restore(["rand_delay", 100])
+
+    def test_compat_roundtrip_old_macro(self):
+        kb = DummyKeyboard(None)
+        kb.vial_protocol = 2
+        original = [ActionText("Hello"), ActionTap(["KC_A", "KC_B"]), ActionDelay(12)]
+        data = kb.macro_serialize(original)
+        decoded = kb.macro_deserialize(data)
+        self.assertEqual(decoded, original)
 
     def test_twobyte_keycodes(self):
         kb = DummyKeyboard(None)
