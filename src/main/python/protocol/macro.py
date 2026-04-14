@@ -2,7 +2,8 @@ import struct
 
 from keycodes.keycodes import Keycode
 from macro.macro_action import SS_TAP_CODE, SS_DOWN_CODE, SS_UP_CODE, ActionText, ActionTap, ActionDown, ActionUp, \
-    SS_QMK_PREFIX, SS_DELAY_CODE, ActionDelay, VIAL_MACRO_EXT_TAP, VIAL_MACRO_EXT_DOWN, VIAL_MACRO_EXT_UP
+    SS_QMK_PREFIX, SS_DELAY_CODE, ActionDelay, VIAL_MACRO_EXT_TAP, VIAL_MACRO_EXT_DOWN, VIAL_MACRO_EXT_UP, \
+    SS_LOOP_START_CODE, SS_LOOP_END_CODE, SS_RAND_DELAY_CODE, ActionLoopStart, ActionLoopEnd, ActionRandDelay
 from macro.macro_action_ui import tag_to_action
 from protocol.base_protocol import BaseProtocol
 from protocol.constants import CMD_VIA_MACRO_GET_COUNT, CMD_VIA_MACRO_GET_BUFFER_SIZE, CMD_VIA_MACRO_GET_BUFFER, \
@@ -103,6 +104,17 @@ def macro_deserialize_v2(data):
 
                 for x in range(4):
                     data.pop(0)
+            elif act in [SS_LOOP_START_CODE, SS_LOOP_END_CODE]:
+                sequence.append([act, None])
+                data.pop(0)
+                data.pop(0)
+            elif act == SS_RAND_DELAY_CODE:
+                if len(data) < 6:
+                    break
+                minimum, maximum = struct.unpack("<HH", data[2:6])
+                sequence.append([SS_RAND_DELAY_CODE, (minimum, maximum)])
+                for x in range(6):
+                    data.pop(0)
             else:
                 # it is clearly malformed, just skip this byte and hope for the best
                 data.pop(0)
@@ -127,15 +139,38 @@ def macro_deserialize_v2(data):
                     args = [Keycode.serialize(kc) for kc in args]
             elif s[0] == SS_DELAY_CODE:
                 args = s[1]
+            elif s[0] == SS_RAND_DELAY_CODE:
+                args = s[1]
 
             if args is not None:
                 cls = {SS_TAP_CODE: ActionTap, SS_DOWN_CODE: ActionDown, SS_UP_CODE: ActionUp,
-                       SS_DELAY_CODE: ActionDelay}[s[0]]
-                out.append(cls(args))
+                       SS_DELAY_CODE: ActionDelay, SS_RAND_DELAY_CODE: ActionRandDelay}[s[0]]
+                if s[0] == SS_RAND_DELAY_CODE:
+                    out.append(cls(args[0], args[1]))
+                else:
+                    out.append(cls(args))
+            elif s[0] == SS_LOOP_START_CODE:
+                out.append(ActionLoopStart())
+            elif s[0] == SS_LOOP_END_CODE:
+                out.append(ActionLoopEnd())
     return out
 
 
 class ProtocolMacro(BaseProtocol):
+
+    def validate_macro(self, macro):
+        stack = []
+        for idx, action in enumerate(macro):
+            if isinstance(action, ActionLoopStart):
+                stack.append(idx)
+            elif isinstance(action, ActionLoopEnd):
+                if len(stack) == 0:
+                    raise RuntimeError("LOOP_END without matching LOOP_START at action {}".format(idx))
+                stack.pop()
+            elif isinstance(action, ActionRandDelay):
+                ActionRandDelay.validate_delay_range(action.minimum, action.maximum)
+        if len(stack) > 0:
+            raise RuntimeError("unclosed LOOP_START at action {}".format(stack[-1]))
 
     def reload_macros_early(self):
         """ Reload macro information that doesn't require any info about keycodes, i.e. number of macros """
@@ -208,6 +243,7 @@ class ProtocolMacro(BaseProtocol):
         """
         Serialize a single macro, a macro is made out of macro actions (BasicAction)
         """
+        self.validate_macro(macro)
         out = b""
         for action in macro:
             out += action.serialize(self.vial_protocol)

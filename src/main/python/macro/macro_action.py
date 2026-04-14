@@ -13,6 +13,9 @@ SS_DELAY_CODE = 4
 VIAL_MACRO_EXT_TAP = 5
 VIAL_MACRO_EXT_DOWN = 6
 VIAL_MACRO_EXT_UP = 7
+SS_LOOP_START_CODE = 0x10
+SS_LOOP_END_CODE = 0x11
+SS_RAND_DELAY_CODE = 0x12
 
 
 class BasicAction:
@@ -157,3 +160,66 @@ class ActionDelay(BasicAction):
 
     def __eq__(self, other):
         return super().__eq__(other) and self.delay == other.delay
+
+
+class ActionLoopStart(BasicAction):
+
+    tag = "loop_start"
+
+    def serialize(self, vial_protocol):
+        if vial_protocol < VIAL_PROTOCOL_ADVANCED_MACROS:
+            raise RuntimeError("ActionLoopStart can only be used with vial_protocol>=2")
+        return struct.pack("BB", SS_QMK_PREFIX, SS_LOOP_START_CODE)
+
+
+class ActionLoopEnd(BasicAction):
+
+    tag = "loop_end"
+
+    def serialize(self, vial_protocol):
+        if vial_protocol < VIAL_PROTOCOL_ADVANCED_MACROS:
+            raise RuntimeError("ActionLoopEnd can only be used with vial_protocol>=2")
+        return struct.pack("BB", SS_QMK_PREFIX, SS_LOOP_END_CODE)
+
+
+class ActionRandDelay(BasicAction):
+
+    tag = "rand_delay"
+
+    def __init__(self, minimum=0, maximum=0):
+        super().__init__()
+        self.minimum = minimum
+        self.maximum = maximum
+
+    @staticmethod
+    def validate_delay_range(minimum, maximum):
+        for name, value in [("minimum", minimum), ("maximum", maximum)]:
+            if not isinstance(value, int):
+                raise RuntimeError("ActionRandDelay {} must be an integer".format(name))
+            if value < 0 or value > 0xFFFF:
+                raise RuntimeError("ActionRandDelay {} must be in range 0..65535".format(name))
+        if minimum > maximum:
+            raise RuntimeError("ActionRandDelay minimum cannot be greater than maximum")
+
+    def serialize(self, vial_protocol):
+        if vial_protocol < VIAL_PROTOCOL_ADVANCED_MACROS:
+            raise RuntimeError("ActionRandDelay can only be used with vial_protocol>=2")
+        self.validate_delay_range(self.minimum, self.maximum)
+        return struct.pack("<BBHH", SS_QMK_PREFIX, SS_RAND_DELAY_CODE, self.minimum, self.maximum)
+
+    def save(self):
+        return super().save() + [self.minimum, self.maximum]
+
+    def restore(self, act):
+        super().restore(act)
+        if len(act) != 3:
+            raise RuntimeError("cannot restore {}: expected [tag, minimum, maximum]".format(self))
+        self.minimum = act[1]
+        self.maximum = act[2]
+        self.validate_delay_range(self.minimum, self.maximum)
+
+    def __eq__(self, other):
+        return super().__eq__(other) and self.minimum == other.minimum and self.maximum == other.maximum
+
+    def __repr__(self):
+        return "{}<{},{}>".format(self.tag, self.minimum, self.maximum)
