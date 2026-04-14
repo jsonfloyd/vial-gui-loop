@@ -1,10 +1,11 @@
 from PyQt5.QtCore import QObject, pyqtSignal, Qt
-from PyQt5.QtWidgets import QLineEdit, QToolButton, QWidget, QSizePolicy, QSpinBox
+from PyQt5.QtWidgets import QLineEdit, QToolButton, QWidget, QSizePolicy, QSpinBox, QHBoxLayout, QLabel
 
 from constants import KEY_SIZE_RATIO
 from tabbed_keycodes import TabbedKeycodes
 from widgets.flowlayout import FlowLayout
-from macro.macro_action import ActionText, ActionSequence, ActionDown, ActionUp, ActionTap, ActionDelay
+from macro.macro_action import ActionText, ActionSequence, ActionDown, ActionUp, ActionTap, ActionDelay, \
+    ActionLoopStart, ActionLoopEnd, ActionRandDelay
 from widgets.key_widget import KeyWidget
 
 
@@ -183,12 +184,89 @@ class ActionDelayUI(BasicActionUI):
         self.changed.emit()
 
 
+class ActionMarkerUI(BasicActionUI):
+
+    marker_text = ""
+
+    def __init__(self, container, act=None):
+        super().__init__(container, act)
+        self.label = QLabel(self.marker_text)
+
+    def insert(self, row):
+        self.container.addWidget(self.label, row, 2)
+
+    def remove(self):
+        self.container.removeWidget(self.label)
+
+    def delete(self):
+        self.label.deleteLater()
+
+
+class ActionLoopStartUI(ActionMarkerUI):
+    actcls = ActionLoopStart
+    marker_text = "Loop start"
+
+
+class ActionLoopEndUI(ActionMarkerUI):
+    actcls = ActionLoopEnd
+    marker_text = "Loop end"
+
+
+class ActionRandDelayUI(BasicActionUI):
+
+    actcls = ActionRandDelay
+
+    def __init__(self, container, act=None):
+        super().__init__(container, act)
+        self.minimum = QSpinBox()
+        self.minimum.setMinimum(0)
+        self.minimum.setMaximum(65535)
+        self.minimum.setValue(self.act.minimum)
+        self.minimum.valueChanged.connect(self.on_change)
+
+        self.maximum = QSpinBox()
+        self.maximum.setMinimum(0)
+        self.maximum.setMaximum(65535)
+        self.maximum.setValue(self.act.maximum)
+        self.maximum.valueChanged.connect(self.on_change)
+
+        self.layout = QHBoxLayout()
+        self.layout_container = QWidget()
+        self.layout_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        self.layout_container.setLayout(self.layout)
+
+        self.layout.addWidget(QLabel("Min (ms)"))
+        self.layout.addWidget(self.minimum)
+        self.layout.addWidget(QLabel("Max (ms)"))
+        self.layout.addWidget(self.maximum)
+        self.layout.addStretch()
+
+    def insert(self, row):
+        self.container.addWidget(self.layout_container, row, 2)
+
+    def remove(self):
+        self.container.removeWidget(self.layout_container)
+
+    def delete(self):
+        self.minimum.deleteLater()
+        self.maximum.deleteLater()
+        self.layout_container.deleteLater()
+
+    def on_change(self):
+        self.act.minimum = self.minimum.value()
+        self.act.maximum = self.maximum.value()
+        self.changed.emit()
+
+
 tag_to_action = {
     "down": ActionDown,
     "up": ActionUp,
     "tap": ActionTap,
     "text": ActionText,
     "delay": ActionDelay,
+    "loop_start": ActionLoopStart,
+    "loop_end": ActionLoopEnd,
+    "rand_delay": ActionRandDelay,
 }
 
 ui_action = {
@@ -197,4 +275,7 @@ ui_action = {
     ActionDown: ActionDownUI,
     ActionTap: ActionTapUI,
     ActionDelay: ActionDelayUI,
+    ActionLoopStart: ActionLoopStartUI,
+    ActionLoopEnd: ActionLoopEndUI,
+    ActionRandDelay: ActionRandDelayUI,
 }

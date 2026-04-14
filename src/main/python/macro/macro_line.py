@@ -3,7 +3,8 @@
 from PyQt5.QtCore import QObject, pyqtSignal, Qt
 from PyQt5.QtWidgets import QHBoxLayout, QToolButton, QComboBox
 
-from macro.macro_action_ui import ActionTextUI, ActionDownUI, ActionUpUI, ActionTapUI, ActionDelayUI
+from macro.macro_action_ui import ActionTextUI, ActionDownUI, ActionUpUI, ActionTapUI, ActionDelayUI, \
+    ActionLoopStartUI, ActionLoopEndUI, ActionRandDelayUI
 from protocol.constants import VIAL_PROTOCOL_ADVANCED_MACROS
 
 
@@ -21,8 +22,8 @@ class MacroLine(QObject):
         self.container = parent.container
 
         if self.parent.parent.keyboard.vial_protocol >= VIAL_PROTOCOL_ADVANCED_MACROS:
-            self.types = self.types[:] + ["Delay (ms)"]
-            self.type_to_cls = self.type_to_cls[:] + [ActionDelayUI]
+            self.types = self.types[:] + ["Delay (ms)", "Loop start", "Loop end", "Random delay (ms)"]
+            self.type_to_cls = self.type_to_cls[:] + [ActionDelayUI, ActionLoopStartUI, ActionLoopEndUI, ActionRandDelayUI]
 
         self.arrows = QHBoxLayout()
         self.btn_up = QToolButton()
