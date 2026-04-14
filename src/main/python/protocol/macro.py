@@ -172,6 +172,13 @@ class ProtocolMacro(BaseProtocol):
         if len(stack) > 0:
             raise RuntimeError("unclosed LOOP_START at action {}".format(stack[-1]))
 
+    def validate_macros(self, macros):
+        for idx, macro in enumerate(macros):
+            try:
+                self.validate_macro(macro)
+            except RuntimeError as e:
+                raise RuntimeError("Macro M{}: {}".format(idx, e))
+
     def reload_macros_early(self):
         """ Reload macro information that doesn't require any info about keycodes, i.e. number of macros """
         data = self.usb_send(self.dev, struct.pack("B", CMD_VIA_MACRO_GET_COUNT), retries=20)

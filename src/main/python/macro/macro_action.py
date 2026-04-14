@@ -201,11 +201,20 @@ class ActionRandDelay(BasicAction):
         if minimum > maximum:
             raise RuntimeError("ActionRandDelay minimum cannot be greater than maximum")
 
+    @staticmethod
+    def encode_uint16(value):
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 0
+        return max(0, min(0xFFFF, value))
+
     def serialize(self, vial_protocol):
         if vial_protocol < VIAL_PROTOCOL_ADVANCED_MACROS:
             raise RuntimeError("ActionRandDelay can only be used with vial_protocol>=2")
-        self.validate_delay_range(self.minimum, self.maximum)
-        return struct.pack("<BBHH", SS_QMK_PREFIX, SS_RAND_DELAY_CODE, self.minimum, self.maximum)
+        minimum = self.encode_uint16(self.minimum)
+        maximum = self.encode_uint16(self.maximum)
+        return struct.pack("<BBHH", SS_QMK_PREFIX, SS_RAND_DELAY_CODE, minimum, maximum)
 
     def save(self):
         return super().save() + [self.minimum, self.maximum]
@@ -216,7 +225,6 @@ class ActionRandDelay(BasicAction):
             raise RuntimeError("cannot restore {}: expected [tag, minimum, maximum]".format(self))
         self.minimum = act[1]
         self.maximum = act[2]
-        self.validate_delay_range(self.minimum, self.maximum)
 
     def __eq__(self, other):
         return super().__eq__(other) and self.minimum == other.minimum and self.maximum == other.maximum

@@ -141,19 +141,21 @@ class TestMacro(unittest.TestCase):
         kb = DummyKeyboard(None)
         kb.vial_protocol = 2
         with self.assertRaisesRegex(RuntimeError, "LOOP_END without matching LOOP_START"):
-            kb.macro_serialize([ActionLoopEnd()])
+            kb.validate_macro([ActionLoopEnd()])
         with self.assertRaisesRegex(RuntimeError, "unclosed LOOP_START"):
-            kb.macro_serialize([ActionLoopStart(), ActionTap(["KC_A"])])
+            kb.validate_macro([ActionLoopStart(), ActionTap(["KC_A"])])
+        with self.assertRaisesRegex(RuntimeError, "Macro M1: LOOP_END without matching LOOP_START"):
+            kb.validate_macros([[ActionText("ok")], [ActionLoopEnd()]])
 
     def test_invalid_rand_delay_validation(self):
         kb = DummyKeyboard(None)
         kb.vial_protocol = 2
         with self.assertRaisesRegex(RuntimeError, "minimum cannot be greater than maximum"):
-            kb.macro_serialize([ActionRandDelay(100, 99)])
+            kb.validate_macro([ActionRandDelay(100, 99)])
         with self.assertRaisesRegex(RuntimeError, "range 0..65535"):
-            kb.macro_serialize([ActionRandDelay(-1, 10)])
+            kb.validate_macro([ActionRandDelay(-1, 10)])
         with self.assertRaisesRegex(RuntimeError, "range 0..65535"):
-            kb.macro_serialize([ActionRandDelay(0, 70000)])
+            kb.validate_macro([ActionRandDelay(0, 70000)])
         with self.assertRaisesRegex(RuntimeError, "expected \\[tag, minimum, maximum\\]"):
             ActionRandDelay().restore(["rand_delay", 100])
 
